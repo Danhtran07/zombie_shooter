@@ -15,6 +15,11 @@ public class PlayerCombat : MonoBehaviour
     private Transform currentEnemy;
     private float targetTimer;
 
+    public Transform CurrentTarget => currentEnemy;
+    public Transform WeaponPivot => weaponPivot;
+    public bool HasTargetInRange =>
+        currentEnemy != null && IsTargetInRange();
+
     private void Awake()
     {
         if (animator == null)
@@ -141,36 +146,5 @@ public class PlayerCombat : MonoBehaviour
             return false;
 
         return IsTargetInRange();
-    }
-
-    private void LateUpdate()
-    {
-        if (currentEnemy == null)
-            return;
-
-        if (weaponPivot == null)
-            return;
-
-        if (!IsTargetInRange())
-            return;
-
-        Vector3 direction =
-            currentEnemy.position -
-            weaponPivot.position;
-
-        direction.y = 0f;
-
-        if (direction.sqrMagnitude <= 0.001f)
-            return;
-
-        Quaternion targetRotation =
-            Quaternion.LookRotation(direction);
-
-        weaponPivot.rotation =
-            Quaternion.Slerp(
-                weaponPivot.rotation,
-                targetRotation,
-                18f * Time.deltaTime
-            );
     }
 }

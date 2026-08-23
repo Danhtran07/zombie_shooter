@@ -51,6 +51,11 @@ public class Gun : MonoBehaviour
         }
     }
 
+    public Vector3 GetAimPoint()
+    {
+        return GetTargetPoint();
+    }
+
     private void Update()
     {
         if (!isFiring)
@@ -58,8 +63,6 @@ public class Gun : MonoBehaviour
 
         if (currentTarget == null)
             return;
-
-        AimAtTarget();
 
         if (bulletPrefab == null && bulletPool == null)
             return;
@@ -102,27 +105,6 @@ public class Gun : MonoBehaviour
 
             SpawnBullet(shotDirection.normalized);
         }
-    }
-
-    private void AimAtTarget()
-    {
-        Vector3 direction =
-            GetTargetPoint() - transform.position;
-
-        direction.y = 0f;
-
-        if (direction.sqrMagnitude <= 0.001f)
-            return;
-
-        Quaternion targetRotation =
-            Quaternion.LookRotation(direction);
-
-        transform.rotation =
-            Quaternion.Slerp(
-                transform.rotation,
-                targetRotation,
-                aimTurnSpeed * Time.deltaTime
-            );
     }
 
     private Vector3 GetTargetPoint()

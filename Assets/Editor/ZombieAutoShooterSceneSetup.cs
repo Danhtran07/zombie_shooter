@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Unity.AI.Navigation;
 using UnityEditor;
+using UnityEditor.Animations;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.AI;
@@ -98,6 +99,35 @@ public static class ZombieAutoShooterSceneSetup
         Debug.Log("[ZombieAutoShooterSceneSetup] main_sence validation passed.");
     }
 
+    [MenuItem("Tools/Zombie Auto Shooter/Setup Player Aim IK")]
+    public static void SetupPlayerAimIkInScene()
+    {
+        Scene scene = EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
+
+        GameObject player = FindPlayer();
+        if (player == null)
+        {
+            throw new InvalidOperationException("No Player object found in main_sence.");
+        }
+
+        Gun gun = player.GetComponentInChildren<Gun>(true);
+        if (gun == null)
+        {
+            throw new InvalidOperationException("No Gun found on Player. Run Build Main Scene first.");
+        }
+
+        PlayerCombat combat = EnsureComponent<PlayerCombat>(player);
+        SetSerialized(combat, "gun", gun);
+        SetSerialized(combat, "weaponPivot", gun.transform);
+        SetupPlayerWeaponAim(player, combat, gun);
+
+        EditorSceneManager.MarkSceneDirty(scene);
+        EditorSceneManager.SaveScene(scene);
+        AssetDatabase.SaveAssets();
+
+        Debug.Log("[ZombieAutoShooterSceneSetup] Player aim IK wired on Player/AutoWeapon.");
+    }
+
     private static GameObject FindPlayer()
     {
         GameObject tagged = GameObject.FindGameObjectWithTag("Player");
@@ -146,6 +176,8 @@ public static class ZombieAutoShooterSceneSetup
         PlayerCombat combat = EnsureComponent<PlayerCombat>(player);
         SetSerialized(combat, "attackRange", 16f);
         SetSerialized(combat, "targetRefreshRate", 0.08f);
+
+        Animator animator = player.GetComponentInChildren<Animator>();
     }
 
     private static void SetupCamera(Camera camera, Transform target)
@@ -207,7 +239,41 @@ public static class ZombieAutoShooterSceneSetup
         SetSerialized(combat, "gun", gun);
         SetSerialized(combat, "weaponPivot", gun.transform);
 
+        SetupPlayerWeaponAim(player, combat, gun);
+
         return gun;
+    }
+
+    private static void SetupPlayerWeaponAim(GameObject player, PlayerCombat combat, Gun gun)
+    {
+        Animator animator = player.GetComponentInChildren<Animator>();
+
+        PlayerWeaponAim aim = EnsureComponent<PlayerWeaponAim>(player);
+        Transform weaponPivot = gun != null ? gun.transform : null;
+        if (weaponPivot == null)
+        {
+            SetSerialized(aim, "combat", combat);
+            SetSerialized(aim, "animator", animator);
+            SetSerialized(aim, "gun", gun);
+            return;
+        }
+
+        Transform rightHand = FindOrCreateChild(weaponPivot, "RightHandTarget");
+        rightHand.localPosition = new Vector3(0.06f, -0.05f, 0.04f);
+        rightHand.localRotation = Quaternion.Euler(0f, 0f, -90f);
+        rightHand.localScale = Vector3.one;
+
+        Transform leftHand = FindOrCreateChild(weaponPivot, "LeftHandTarget");
+        leftHand.localPosition = new Vector3(0.05f, -0.03f, 0.32f);
+        leftHand.localRotation = Quaternion.Euler(0f, 0f, -90f);
+        leftHand.localScale = Vector3.one;
+
+        SetSerialized(aim, "combat", combat);
+        SetSerialized(aim, "animator", animator);
+        SetSerialized(aim, "gun", gun);
+        SetSerialized(aim, "weaponPivot", weaponPivot);
+        SetSerialized(aim, "rightHandTarget", rightHand);
+        SetSerialized(aim, "leftHandTarget", leftHand);
     }
 
     private static GameObject LoadBulletPrefab()
