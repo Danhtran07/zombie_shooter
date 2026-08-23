@@ -1,68 +1,214 @@
 using UnityEngine;
 
 [RequireComponent(typeof(Rigidbody))]
+[RequireComponent(typeof(Collider))]
 public class Bullet : MonoBehaviour
 {
     [SerializeField] private float damage = 10f;
+    [SerializeField] private float lifetime = 5f;
 
-    private Transform target;
-    private float lifetime;
-
-    public void Initialize(GameObject owner, Transform targetTransform, float lifetimeSeconds)
-    {
-        target = targetTransform;
-        lifetime = Mathf.Max(0.01f, lifetimeSeconds);
-        CancelInvoke(nameof(DestroyBullet));
-        Invoke(nameof(DestroyBullet), lifetime);
-
-        Collider bulletCollider = GetComponent<Collider>();
-        if (owner != null && bulletCollider != null)
-        {
-            foreach (Collider ownerCollider in owner.GetComponentsInChildren<Collider>())
-                Physics.IgnoreCollision(bulletCollider, ownerCollider);
-        }
-    }
+    private Rigidbody rb;
+    private PooledObject pooledObject;
+    private GameObject owner;
+    private bool hasHit;
 
     private void Awake()
     {
-        lifetime = 5f;
-        Invoke(nameof(DestroyBullet), lifetime);
+        rb = GetComponent<Rigidbody>();
+        pooledObject = GetComponent<PooledObject>();
+
+        rb.useGravity = false;
+        rb.collisionDetectionMode =
+            CollisionDetectionMode.ContinuousDynamic;
+
+        Collider[] bulletColliders =
+            GetComponentsInChildren<Collider>();
+
+        foreach (Collider bulletCollider in bulletColliders)
+        {
+            if (bulletCollider != null)
+                bulletCollider.isTrigger = true;
+        }
     }
 
-    private void DestroyBullet()
+    public void Initialize(
+        GameObject bulletOwner,
+        Vector3 direction,
+        float speed,
+        float damageAmount,
+        float lifeTime)
     {
-        Destroy(gameObject);
+        owner = bulletOwner;
+        damage = damageAmount;
+        lifetime = lifeTime;
+        hasHit = false;
+
+        IgnoreOwnerCollision();
+        IgnorePlayerCollision();
+
+        rb.velocity = direction.normalized * speed;
+
+        CancelInvoke();
+        Invoke(nameof(Expire), lifetime);
+    }
+
+    private void IgnoreOwnerCollision()
+    {
+        if (owner == null)
+            return;
+
+        Collider[] bulletColliders =
+            GetComponentsInChildren<Collider>();
+
+        Collider[] ownerColliders =
+            owner.GetComponentsInChildren<Collider>();
+
+        foreach (Collider bulletCollider in bulletColliders)
+        {
+            if (bulletCollider == null)
+                continue;
+
+            foreach (Collider ownerCollider in ownerColliders)
+            {
+                if (ownerCollider == null)
+                    continue;
+
+                Physics.IgnoreCollision(
+                    bulletCollider,
+                    ownerCollider,
+                    true
+                );
+            }
+        }
     }
 
     private void OnCollisionEnter(Collision collision)
     {
-        HandleHit(collision.collider);
+        if (hasHit)
+            return;
+
+        ProcessHit(
+            collision.collider,
+            collision.GetContact(0).point,
+            collision.GetContact(0).normal
+        );
     }
 
     private void OnTriggerEnter(Collider other)
     {
-        HandleHit(other);
+        if (hasHit)
+            return;
+
+        Vector3 hitPoint =
+            other.ClosestPoint(transform.position);
+
+        Vector3 direction =
+            (other.transform.position - transform.position)
+            .normalized;
+
+        ProcessHit(
+            other,
+            hitPoint,
+            direction
+        );
     }
 
-    private void HandleHit(Collider hitCollider)
+    private void ProcessHit(
+        Collider hitCollider,
+        Vector3 hitPoint,
+        Vector3 hitDirection)
     {
-        if (hitCollider.transform == transform || hitCollider.CompareTag("Player"))
+        if (hitCollider == null)
             return;
 
-        if (target != null && hitCollider.transform.IsChildOf(target) ||
-            target != null && hitCollider.transform == target)
+        if (owner != null &&
+            hitCollider.transform.root.gameObject == owner)
         {
-            hitCollider.SendMessageUpwards("TakeDamage", damage, SendMessageOptions.DontRequireReceiver);
-            hitCollider.SendMessageUpwards("Damage", damage, SendMessageOptions.DontRequireReceiver);
-            Destroy(gameObject);
             return;
         }
 
-        if (hitCollider.CompareTag("Enemy"))
+        if (hitCollider.CompareTag("Player") ||
+            hitCollider.GetComponentInParent<PlayerHealth>() != null)
         {
-            hitCollider.SendMessageUpwards("TakeDamage", damage, SendMessageOptions.DontRequireReceiver);
-            hitCollider.SendMessageUpwards("Damage", damage, SendMessageOptions.DontRequireReceiver);
-            Destroy(gameObject);
+            IgnoreCollider(hitCollider);
+            return;
         }
+
+        EnemyHealth enemy =
+            hitCollider.GetComponentInParent<EnemyHealth>();
+
+        if (enemy == null || enemy.IsDead)
+        {
+            hasHit = true;
+            Expire();
+            return;
+        }
+
+        hasHit = true;
+
+        enemy.TakeDamage(
+            damage,
+            hitPoint,
+            hitDirection
+        );
+
+        Expire();
+    }
+
+    private void IgnorePlayerCollision()
+    {
+        GameObject player =
+            GameObject.FindGameObjectWithTag("Player");
+
+        if (player == null)
+            return;
+
+        Collider[] playerColliders =
+            player.GetComponentsInChildren<Collider>();
+
+        foreach (Collider playerCollider in playerColliders)
+        {
+            IgnoreCollider(playerCollider);
+        }
+    }
+
+    private void IgnoreCollider(Collider other)
+    {
+        if (other == null)
+            return;
+
+        Collider[] bulletColliders =
+            GetComponentsInChildren<Collider>();
+
+        foreach (Collider bulletCollider in bulletColliders)
+        {
+            if (bulletCollider == null)
+                continue;
+
+            Physics.IgnoreCollision(
+                bulletCollider,
+                other,
+                true
+            );
+        }
+    }
+
+    private void Expire()
+    {
+        CancelInvoke();
+
+        if (rb != null)
+        {
+            rb.velocity = Vector3.zero;
+            rb.angularVelocity = Vector3.zero;
+        }
+
+        if (pooledObject != null && pooledObject.HasPool)
+        {
+            pooledObject.Release();
+            return;
+        }
+
+        Destroy(gameObject);
     }
 }

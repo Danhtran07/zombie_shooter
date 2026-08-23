@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.AI;
 
 public class EnemyAI : MonoBehaviour
 {
@@ -12,13 +13,31 @@ public class EnemyAI : MonoBehaviour
     [Header("Attack")]
     [SerializeField] private float attackRange = 1.5f;
     [SerializeField] private float attackCooldown = 1.5f;
+    [SerializeField] private float damage = 10f;
 
     private Animator animator;
+    private NavMeshAgent agent;
+    private EnemyHealth health;
+    private float baseMoveSpeed;
+    private float baseDamage;
+    private float baseMaxHealth;
     private float attackTimer;
 
     private void Awake()
     {
         animator = GetComponent<Animator>();
+        agent = GetComponent<NavMeshAgent>();
+        health = GetComponent<EnemyHealth>();
+        baseMoveSpeed = moveSpeed;
+        baseDamage = damage;
+        baseMaxHealth = health != null ? health.MaxHealth : 1f;
+
+        if (agent != null)
+        {
+            agent.speed = moveSpeed;
+            agent.stoppingDistance = attackRange;
+            agent.updateRotation = false;
+        }
     }
 
     private void Start()
@@ -59,10 +78,21 @@ public class EnemyAI : MonoBehaviour
     {
         // QUAN TRỌNG:
         // Reset Attack Trigger khi Player chạy xa
-        animator.ResetTrigger("Attack");
+        if (animator != null)
+        {
+            animator.ResetTrigger("Attack");
+            animator.SetFloat("Speed", 1f);
+        }
 
         Vector3 direction = player.position - transform.position;
         direction.y = 0f;
+
+        if (agent != null && agent.enabled && agent.isOnNavMesh)
+        {
+            agent.isStopped = false;
+            agent.speed = moveSpeed;
+            agent.SetDestination(player.position);
+        }
 
         if (direction.sqrMagnitude > 0.01f)
         {
@@ -75,20 +105,27 @@ public class EnemyAI : MonoBehaviour
                 rotationSpeed * Time.deltaTime
             );
 
-            transform.position +=
-                transform.forward *
-                moveSpeed *
-                Time.deltaTime;
+            if (agent == null || !agent.enabled || !agent.isOnNavMesh)
+            {
+                transform.position +=
+                    transform.forward *
+                    moveSpeed *
+                    Time.deltaTime;
+            }
         }
-
-        // Walk animation
-        animator.SetFloat("Speed", 1f);
     }
 
     private void Attack()
     {
-        // Dừng di chuyển
-        animator.SetFloat("Speed", 0f);
+        if (agent != null && agent.enabled && agent.isOnNavMesh)
+        {
+            agent.isStopped = true;
+        }
+
+        if (animator != null)
+        {
+            animator.SetFloat("Speed", 0f);
+        }
 
         // Quay mặt về Player
         Vector3 direction = player.position - transform.position;
@@ -109,9 +146,52 @@ public class EnemyAI : MonoBehaviour
         // Chỉ attack khi cooldown hết
         if (attackTimer <= 0f)
         {
-            animator.SetTrigger("Attack");
+            if (animator != null)
+            {
+                animator.SetTrigger("Attack");
+            }
+
+            PlayerHealth playerHealth =
+                player.GetComponentInParent<PlayerHealth>();
+
+            if (playerHealth != null)
+            {
+                playerHealth.TakeDamage(damage);
+            }
 
             attackTimer = attackCooldown;
+        }
+    }
+
+    public void SetTarget(Transform target)
+    {
+        player = target;
+    }
+
+    public void SetStats(
+        float healthMultiplier,
+        float speedMultiplier,
+        float damageMultiplier)
+    {
+        moveSpeed =
+            baseMoveSpeed *
+            Mathf.Max(0.01f, speedMultiplier);
+
+        damage =
+            baseDamage *
+            Mathf.Max(0f, damageMultiplier);
+
+        if (agent != null)
+        {
+            agent.speed = moveSpeed;
+        }
+
+        if (health != null)
+        {
+            health.SetMaxHealth(
+                baseMaxHealth *
+                Mathf.Max(0.01f, healthMultiplier)
+            );
         }
     }
 
