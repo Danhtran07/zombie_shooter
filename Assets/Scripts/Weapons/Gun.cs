@@ -24,8 +24,8 @@ public class Gun : MonoBehaviour
     [SerializeField] private Vector3 targetOffset = new Vector3(0f, 1f, 0f);
 
     private Transform currentTarget;
-    private GameObject muzzleFlashInstance;
-    private ParticleSystem[] muzzleFlashParticles;
+    private GunEffects effects;
+    private GunProjectileSpawner projectileSpawner;
     private bool isFiring;
     private float fireTimer;
 
@@ -60,24 +60,25 @@ public class Gun : MonoBehaviour
         audioSource.playOnAwake = false;
         audioSource.spatialBlend = 1f;
 
-        if (muzzleFlashPrefab != null)
-        {
-            muzzleFlashInstance =
-                Instantiate(muzzleFlashPrefab, muzzle);
+        effects = new GunEffects(
+            muzzle,
+            muzzleFlashPrefab,
+            audioSource,
+            fireSound,
+            fireVolume
+        );
 
-            muzzleFlashInstance.transform.localPosition = Vector3.zero;
-            muzzleFlashInstance.transform.localRotation = Quaternion.identity;
-            muzzleFlashParticles =
-                muzzleFlashInstance.GetComponentsInChildren<ParticleSystem>(true);
-            muzzleFlashInstance.SetActive(false);
-        }
-        else
-        {
-            Debug.LogWarning(
-                "[Gun] Muzzle Flash Prefab chưa được gán.",
-                this
-            );
-        }
+        projectileSpawner = new GunProjectileSpawner(
+            muzzle,
+            bulletPrefab,
+            bulletPool,
+            transform.root.gameObject,
+            bulletSpeed,
+            damage,
+            bulletLifetime,
+            criticalChance,
+            criticalDamageMultiplier
+        );
 
         if (fireSound == null)
         {
@@ -161,7 +162,7 @@ public class Gun : MonoBehaviour
                 Quaternion.AngleAxis(yaw, Vector3.up) *
                 direction;
 
-            SpawnBullet(shotDirection.normalized);
+            projectileSpawner?.Spawn(shotDirection.normalized);
         }
 
         if (cameraController != null)
@@ -169,30 +170,7 @@ public class Gun : MonoBehaviour
             cameraController.Shake();
         }
 
-        PlayMuzzleFlash();
-        PlayFireSound();
-    }
-
-    private void PlayMuzzleFlash()
-    {
-        if (muzzleFlashInstance == null)
-            return;
-
-        muzzleFlashInstance.SetActive(true);
-
-        foreach (ParticleSystem particleSystem in muzzleFlashParticles)
-        {
-            if (particleSystem != null)
-                particleSystem.Play(true);
-        }
-    }
-
-    private void PlayFireSound()
-    {
-        if (audioSource == null || fireSound == null)
-            return;
-
-        audioSource.PlayOneShot(fireSound, fireVolume);
+        effects?.Play();
     }
 
     private Vector3 GetTargetPoint()
@@ -211,46 +189,6 @@ public class Gun : MonoBehaviour
         }
 
         return currentTarget.position + targetOffset;
-    }
-
-    private void SpawnBullet(Vector3 direction)
-    {
-        Quaternion rotation =
-            Quaternion.LookRotation(direction);
-
-        GameObject bulletObject = bulletPool != null
-            ? bulletPool.Spawn(muzzle.position, rotation)
-            : Instantiate(bulletPrefab, muzzle.position, rotation);
-
-        if (bulletObject == null)
-        {
-            return;
-        }
-
-        Bullet bullet =
-            bulletObject.GetComponent<Bullet>();
-
-        if (bullet == null)
-        {
-            Debug.LogError(
-                "Bullet prefab does not contain Bullet component."
-            );
-
-            return;
-        }
-
-        float finalDamage =
-            Random.value <= criticalChance
-                ? damage * criticalDamageMultiplier
-                : damage;
-
-        bullet.Initialize(
-            transform.root.gameObject,
-            direction,
-            bulletSpeed,
-            finalDamage,
-            bulletLifetime
-        );
     }
 
     public void AddDamageMultiplier(float multiplier)
