@@ -735,7 +735,11 @@ public static class ZombieAutoShooterSceneSetup
     {
         NavMeshSurface surface = EnsureComponent<NavMeshSurface>(systems);
         surface.collectObjects = CollectObjects.All;
-        surface.useGeometry = NavMeshCollectGeometry.RenderMeshes;
+        surface.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
+        int groundLayer = LayerMask.NameToLayer("Ground");
+        surface.layerMask = groundLayer >= 0
+            ? 1 << groundLayer
+            : Physics.DefaultRaycastLayers;
         surface.defaultArea = 0;
         surface.BuildNavMesh();
         EditorUtility.SetDirty(surface);

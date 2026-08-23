@@ -24,6 +24,8 @@ public class ZombieSpawner : MonoBehaviour
 
     [FormerlySerializedAs("spawnDistanceMax")]
     [SerializeField] private float spawnDistanceMax = 32f;
+    [SerializeField] private float navMeshSampleDistance = 2f;
+    [SerializeField] private LayerMask groundLayer;
 
     [SerializeField] private float spawnRate = 1.25f;
 
@@ -181,8 +183,6 @@ public class ZombieSpawner : MonoBehaviour
             return true;
         }
 
-        Vector3 fallbackPosition = player.position;
-
         for (int i = 0; i < 16; i++)
         {
             Vector2 circle = Random.insideUnitCircle.normalized;
@@ -199,21 +199,14 @@ public class ZombieSpawner : MonoBehaviour
                 player.position +
                 new Vector3(circle.x, 0f, circle.y) * distance;
 
-            fallbackPosition = candidate;
-
-            if (NavMesh.SamplePosition(
-                    candidate,
-                    out NavMeshHit hit,
-                    4f,
-                    NavMesh.AllAreas))
+            if (TryGetGroundedNavMeshPosition(candidate, out spawnPosition))
             {
-                spawnPosition = hit.position;
                 return true;
             }
         }
 
-        spawnPosition = fallbackPosition;
-        return true;
+        spawnPosition = Vector3.zero;
+        return false;
     }
 
     private bool TryGetSpawnPointPosition(out Vector3 spawnPosition)
@@ -243,22 +236,81 @@ public class ZombieSpawner : MonoBehaviour
                 continue;
             }
 
-            if (NavMesh.SamplePosition(
-                    spawnPoint.position,
-                    out NavMeshHit hit,
-                    4f,
-                    NavMesh.AllAreas))
+                    if (TryGetGroundedNavMeshPosition(
+                        spawnPoint.position,
+                        out spawnPosition))
             {
-                spawnPosition = hit.position;
                 return true;
             }
-
-            spawnPosition = spawnPoint.position;
-            return true;
         }
 
         spawnPosition = Vector3.zero;
         return false;
+    }
+
+    private bool TryGetGroundedNavMeshPosition(
+        Vector3 origin,
+        out Vector3 spawnPosition)
+    {
+        int layerMask = GetGroundLayerMask();
+        Vector3 rayOrigin = origin + Vector3.up * 50f;
+
+        if (!Physics.Raycast(
+                rayOrigin,
+                Vector3.down,
+                out RaycastHit groundHit,
+                100f,
+                layerMask,
+                QueryTriggerInteraction.Ignore))
+        {
+            spawnPosition = Vector3.zero;
+            return false;
+        }
+
+        spawnPosition = Vector3.zero;
+
+        if (!NavMesh.SamplePosition(
+            groundHit.point,
+            out NavMeshHit navMeshHit,
+            navMeshSampleDistance,
+            NavMesh.AllAreas))
+        {
+            return false;
+        }
+
+        return AssignSpawnPosition(
+            navMeshHit.position,
+            groundHit.point,
+            out spawnPosition
+        );
+    }
+
+    private bool AssignSpawnPosition(
+        Vector3 navMeshPosition,
+        Vector3 groundPosition,
+        out Vector3 spawnPosition)
+    {
+        if (Mathf.Abs(navMeshPosition.y - groundPosition.y) > navMeshSampleDistance)
+        {
+            spawnPosition = Vector3.zero;
+            return false;
+        }
+
+        spawnPosition = navMeshPosition;
+        return true;
+    }
+
+    private int GetGroundLayerMask()
+    {
+        if (groundLayer.value != 0)
+        {
+            return groundLayer.value;
+        }
+
+        int groundLayerIndex = LayerMask.NameToLayer("Ground");
+        return groundLayerIndex >= 0
+            ? 1 << groundLayerIndex
+            : Physics.DefaultRaycastLayers;
     }
 
     private int GetCurrentMaxAlive()
