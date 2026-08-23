@@ -563,6 +563,11 @@ public static class ZombieAutoShooterSceneSetup
         SetSerialized(spawner, "zombiePrefabs", new[] { zombiePrefab });
         SetSerialized(spawner, "zombiePools", new[] { zombiePool });
         SetSerialized(spawner, "spawnPoints", spawnPoints);
+        int groundLayer = LayerMask.NameToLayer("Ground");
+        if (groundLayer >= 0)
+        {
+            SetSerialized(spawner, "groundLayer", 1 << groundLayer);
+        }
         SetSerialized(spawner, "maxZombies", 60);
         SetSerialized(spawner, "spawnBurstCount", 3);
         SetSerialized(spawner, "spawnDistanceMin", 10f);
@@ -734,16 +739,69 @@ public static class ZombieAutoShooterSceneSetup
     private static void SetupNavMesh(GameObject systems, ZombieSpawner spawner)
     {
         NavMeshSurface surface = EnsureComponent<NavMeshSurface>(systems);
-        surface.collectObjects = CollectObjects.All;
+        surface.collectObjects = CollectObjects.Volume;
         surface.useGeometry = NavMeshCollectGeometry.PhysicsColliders;
         int groundLayer = LayerMask.NameToLayer("Ground");
-        surface.layerMask = groundLayer >= 0
+        int groundMask = groundLayer >= 0
             ? 1 << groundLayer
             : Physics.DefaultRaycastLayers;
+
+        surface.layerMask = groundMask;
+        SetNavMeshVolumeToGround(surface, groundMask);
         surface.defaultArea = 0;
         surface.BuildNavMesh();
         EditorUtility.SetDirty(surface);
         EditorUtility.SetDirty(spawner);
+    }
+
+    private static void SetNavMeshVolumeToGround(
+        NavMeshSurface surface,
+        int groundMask)
+    {
+        Collider[] colliders = UnityEngine.Object.FindObjectsByType<Collider>(
+            FindObjectsInactive.Include,
+            FindObjectsSortMode.None
+        );
+
+        Bounds groundBounds = default;
+        bool hasGround = false;
+
+        for (int i = 0; i < colliders.Length; i++)
+        {
+            Collider collider = colliders[i];
+
+            if (collider == null || !collider.enabled ||
+                (groundMask & (1 << collider.gameObject.layer)) == 0)
+            {
+                continue;
+            }
+
+            if (!hasGround)
+            {
+                groundBounds = collider.bounds;
+                hasGround = true;
+            }
+            else
+            {
+                groundBounds.Encapsulate(collider.bounds);
+            }
+        }
+
+        if (!hasGround)
+        {
+            Debug.LogWarning(
+                "[ZombieAutoShooterSceneSetup] No Ground colliders found for NavMesh volume."
+            );
+            return;
+        }
+
+        Vector3 localCenter =
+            surface.transform.InverseTransformPoint(groundBounds.center);
+        Vector3 localSize = groundBounds.size + Vector3.up * 2f;
+        localSize.y = Mathf.Max(localSize.y, 4f);
+
+        surface.center = localCenter;
+        surface.size = localSize;
     }
 
     private static void AddSceneToBuildSettings()

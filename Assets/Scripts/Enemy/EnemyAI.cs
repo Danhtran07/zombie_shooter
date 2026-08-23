@@ -57,6 +57,8 @@ public class EnemyAI : MonoBehaviour
         if (player == null)
             return;
 
+        EnsureAgentOnNavMesh();
+
         attackTimer -= Time.deltaTime;
 
         float distance = Vector3.Distance(
@@ -91,7 +93,15 @@ public class EnemyAI : MonoBehaviour
         {
             agent.isStopped = false;
             agent.speed = moveSpeed;
-            agent.SetDestination(player.position);
+
+            if (NavMesh.SamplePosition(
+                    player.position,
+                    out NavMeshHit playerHit,
+                    4f,
+                    NavMesh.AllAreas))
+            {
+                agent.SetDestination(playerHit.position);
+            }
         }
 
         if (direction.sqrMagnitude > 0.01f)
@@ -112,6 +122,23 @@ public class EnemyAI : MonoBehaviour
                     moveSpeed *
                     Time.deltaTime;
             }
+        }
+    }
+
+    private void EnsureAgentOnNavMesh()
+    {
+        if (agent == null || !agent.enabled || agent.isOnNavMesh)
+        {
+            return;
+        }
+
+        if (NavMesh.SamplePosition(
+                transform.position,
+                out NavMeshHit hit,
+                1.5f,
+                NavMesh.AllAreas))
+        {
+            agent.Warp(hit.position);
         }
     }
 

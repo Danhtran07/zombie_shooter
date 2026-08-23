@@ -41,6 +41,8 @@ public class ZombieSpawner : MonoBehaviour
     [SerializeField] private float damageIncreasePerMinute = 0.15f;
 
     private int aliveCount;
+    private readonly HashSet<EnemyHealth> spawnedEnemies =
+        new HashSet<EnemyHealth>();
     private float timer;
     private float elapsed;
 
@@ -141,6 +143,7 @@ public class ZombieSpawner : MonoBehaviour
 
         if (enemyHealth != null)
         {
+            spawnedEnemies.Add(enemyHealth);
             enemyHealth.ResetHealth();
         }
     }
@@ -363,9 +366,9 @@ public class ZombieSpawner : MonoBehaviour
         {
             ZombieSpawner spawner = ActiveSpawners[i];
 
-            if (spawner != null && spawner.aliveCount > 0)
+            if (spawner != null && spawner.spawnedEnemies.Remove(enemy))
             {
-                spawner.aliveCount--;
+                spawner.aliveCount = Mathf.Max(0, spawner.aliveCount - 1);
                 return;
             }
         }
