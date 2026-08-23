@@ -14,6 +14,7 @@ public class PlayerCombat : MonoBehaviour
 
     private Transform currentEnemy;
     private float targetTimer;
+    private bool hasShootingParameter;
 
     public Transform CurrentTarget => currentEnemy;
     public Transform WeaponPivot => weaponPivot;
@@ -32,6 +33,12 @@ public class PlayerCombat : MonoBehaviour
         {
             gun = GetComponentInChildren<Gun>();
         }
+
+        hasShootingParameter =
+            HasAnimatorParameter(
+                "IsShooting",
+                AnimatorControllerParameterType.Bool
+            );
 
         if (weaponPivot == null && gun != null)
         {
@@ -63,7 +70,8 @@ public class PlayerCombat : MonoBehaviour
             hasTarget &&
             IsTargetInRange();
 
-        if (animator != null)
+        if (animator != null &&
+            hasShootingParameter)
         {
             animator.SetBool(
                 "IsShooting",
@@ -140,11 +148,35 @@ public class PlayerCombat : MonoBehaviour
             return false;
 
         EnemyHealth health =
-            target.GetComponent<EnemyHealth>();
+            target.GetComponentInParent<EnemyHealth>();
 
-        if (health != null && health.IsDead)
+        if (health == null || health.IsDead)
             return false;
 
         return IsTargetInRange();
+    }
+
+    private bool HasAnimatorParameter(
+        string parameterName,
+        AnimatorControllerParameterType parameterType)
+    {
+        if (animator == null)
+        {
+            return false;
+        }
+
+        AnimatorControllerParameter[] parameters =
+            animator.parameters;
+
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            if (parameters[i].name == parameterName &&
+                parameters[i].type == parameterType)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

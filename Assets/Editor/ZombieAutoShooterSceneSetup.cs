@@ -14,6 +14,8 @@ public static class ZombieAutoShooterSceneSetup
 {
     private const string ScenePath = "Assets/Scenes/main_sence.unity";
     private const string GeneratedFolder = "Assets/Generated/ZombieAutoShooter";
+    private const string MuzzleFlashPrefabPath =
+        "Assets/JMO Assets/WarFX/_Effects/MuzzleFlashes/4Planes/WFX_MF 4P RIFLE1.prefab";
     private const string ZombiePrefabPath = GeneratedFolder + "/ZombieRuntime.prefab";
 
     [MenuItem("Tools/Zombie Auto Shooter/Build Main Scene")]
@@ -240,6 +242,11 @@ public static class ZombieAutoShooterSceneSetup
 
         SetSerialized(gun, "muzzle", muzzle);
         SetSerialized(gun, "bulletPrefab", bulletPrefab);
+        SetSerialized(
+            gun,
+            "muzzleFlashPrefab",
+            AssetDatabase.LoadAssetAtPath<GameObject>(MuzzleFlashPrefabPath)
+        );
         SetSerialized(gun, "bulletSpeed", 45f);
         SetSerialized(gun, "fireRate", 0.08f);
         SetSerialized(gun, "damage", 12f);
@@ -267,17 +274,57 @@ public static class ZombieAutoShooterSceneSetup
             return;
         }
 
+        SetSerialized(aim, "combat", combat);
+        SetSerialized(aim, "animator", animator);
+        SetSerialized(aim, "gun", gun);
+        SetSerialized(aim, "weaponPivot", weaponPivot);
+        aim.AttachGunToHand();
+        weaponPivot = gun.transform;
+
         Transform leftHand = FindOrCreateChild(weaponPivot, "LeftHandTarget");
         leftHand.localPosition = new Vector3(0.05f, -0.03f, 0.32f);
         leftHand.localRotation = Quaternion.Euler(0f, 0f, -90f);
         leftHand.localScale = Vector3.one;
 
-        SetSerialized(aim, "combat", combat);
-        SetSerialized(aim, "animator", animator);
-        SetSerialized(aim, "gun", gun);
+        Transform rightHand = FindOrCreateChild(weaponPivot, "RightHandTarget");
+        Transform rightHandBone = FindRightHand(player.transform);
+        if (rightHandBone != null)
+        {
+            rightHand.localPosition =
+                weaponPivot.InverseTransformPoint(rightHandBone.position);
+
+            rightHand.localRotation =
+                Quaternion.Inverse(weaponPivot.rotation) * rightHandBone.rotation;
+        }
+        rightHand.localScale = Vector3.one;
+
         SetSerialized(aim, "weaponPivot", weaponPivot);
         SetSerialized(aim, "leftHandTarget", leftHand);
-        aim.AttachGunToHand();
+        SetSerialized(aim, "rightHandTarget", rightHand);
+        SetSerialized(
+            aim,
+            "rightHandLocalPosition",
+            rightHand.localPosition
+        );
+        SetSerialized(
+            aim,
+            "rightHandLocalEuler",
+            rightHand.localRotation.eulerAngles
+        );
+        SetSerialized(
+            aim,
+            "stableWeaponLocalPosition",
+            player.transform.InverseTransformPoint(weaponPivot.position)
+        );
+        SetSerialized(
+            aim,
+            "stableWeaponLocalEuler",
+            (Quaternion.Inverse(player.transform.rotation) * weaponPivot.rotation)
+            .eulerAngles
+        );
+        SetSerialized(aim, "stabilizeWeapon", true);
+        SetSerialized(aim, "applyGripOffsets", true);
+        aim.ConfigureWeaponAimNow();
 
         if (gun.transform.parent == null ||
             gun.transform.parent == player.transform)

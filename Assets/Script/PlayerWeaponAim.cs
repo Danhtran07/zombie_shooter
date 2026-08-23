@@ -10,20 +10,40 @@ public class PlayerWeaponAim : MonoBehaviour
     [SerializeField] private Animator animator;
     [SerializeField] private Transform weaponPivot;
     [SerializeField] private Transform leftHandTarget;
+    [SerializeField] private Transform rightHandTarget;
     [SerializeField] private Transform aimTarget;
 
     [Header("Gun Aim")]
     [SerializeField] private Vector3 leftHandLocalPosition = new Vector3(0.05f, -0.03f, 0.32f);
     [SerializeField] private Vector3 leftHandLocalEuler = new Vector3(0f, 0f, -90f);
+    [SerializeField] private Vector3 rightHandLocalPosition = Vector3.zero;
+    [SerializeField] private Vector3 rightHandLocalEuler = Vector3.zero;
+    [SerializeField] private Vector3 stableWeaponLocalPosition;
+    [SerializeField] private Vector3 stableWeaponLocalEuler;
+    [SerializeField] private bool stabilizeWeapon = true;
     [SerializeField] private bool applyGripOffsets = true;
 
     private Transform leftHint;
+    private Transform rightHint;
     private ThirdPersonController playerController;
     private Transform rightHandBone;
+    private bool capturedStablePose;
 
     private void Reset()
     {
         ResolveReferences();
+    }
+
+    public void ConfigureWeaponAimNow()
+    {
+        ResolveReferences();
+        AttachGunToHand();
+        EnsureWeaponTargets();
+        CaptureStableWeaponPoseIfNeeded();
+        CaptureRightHandGrip();
+        UpdateGripTargets();
+        SetupTwoBoneIK();
+        StabilizeWeaponPose();
     }
 
     private void Awake()
@@ -31,6 +51,7 @@ public class PlayerWeaponAim : MonoBehaviour
         ResolveReferences();
         AttachGunToHand();
         EnsureWeaponTargets();
+        CaptureStableWeaponPoseIfNeeded();
         SetupTwoBoneIK();
     }
 
@@ -42,6 +63,11 @@ public class PlayerWeaponAim : MonoBehaviour
         UpdateGripTargets();
         UpdateAim();
         UpdateElbowHints();
+    }
+
+    private void LateUpdate()
+    {
+        StabilizeWeaponPose();
     }
 
     public void AttachGunToHand()
@@ -57,7 +83,7 @@ public class PlayerWeaponAim : MonoBehaviour
             return;
         }
 
-        if (!gun.transform.IsChildOf(rightHandBone))
+        if (gun.transform.parent != rightHandBone)
         {
             gun.transform.SetParent(rightHandBone, true);
         }
@@ -116,6 +142,12 @@ public class PlayerWeaponAim : MonoBehaviour
             leftHandTarget.localPosition = leftHandLocalPosition;
             leftHandTarget.localRotation = Quaternion.Euler(leftHandLocalEuler);
         }
+
+        if (rightHandTarget == null)
+        {
+            rightHandTarget = FindOrCreateChild(weaponPivot, "RightHandTarget");
+            CaptureRightHandGrip();
+        }
     }
 
     private void UpdateGripTargets()
@@ -129,6 +161,12 @@ public class PlayerWeaponAim : MonoBehaviour
         {
             leftHandTarget.localPosition = leftHandLocalPosition;
             leftHandTarget.localRotation = Quaternion.Euler(leftHandLocalEuler);
+        }
+
+        if (rightHandTarget != null)
+        {
+            rightHandTarget.localPosition = rightHandLocalPosition;
+            rightHandTarget.localRotation = Quaternion.Euler(rightHandLocalEuler);
         }
     }
 
@@ -156,6 +194,83 @@ public class PlayerWeaponAim : MonoBehaviour
         playerController?.SetAimDirection(bodyDirection);
     }
 
+    private void CaptureStableWeaponPoseIfNeeded()
+    {
+        if (capturedStablePose || weaponPivot == null)
+        {
+            return;
+        }
+
+        if (stableWeaponLocalPosition == Vector3.zero &&
+            stableWeaponLocalEuler == Vector3.zero)
+        {
+            stableWeaponLocalPosition =
+                transform.InverseTransformPoint(weaponPivot.position);
+
+            stableWeaponLocalEuler =
+                (Quaternion.Inverse(transform.rotation) * weaponPivot.rotation)
+                .eulerAngles;
+        }
+
+        capturedStablePose = true;
+    }
+
+    private void CaptureRightHandGrip()
+    {
+        if (rightHandTarget == null ||
+            weaponPivot == null ||
+            rightHandBone == null)
+        {
+            return;
+        }
+
+        rightHandLocalPosition =
+            weaponPivot.InverseTransformPoint(rightHandBone.position);
+
+        rightHandLocalEuler =
+            (Quaternion.Inverse(weaponPivot.rotation) * rightHandBone.rotation)
+            .eulerAngles;
+
+        rightHandTarget.localPosition = rightHandLocalPosition;
+        rightHandTarget.localRotation = Quaternion.Euler(rightHandLocalEuler);
+    }
+
+    private void StabilizeWeaponPose()
+    {
+        if (!stabilizeWeapon || weaponPivot == null)
+        {
+            return;
+        }
+
+        CaptureStableWeaponPoseIfNeeded();
+
+        Vector3 stablePosition =
+            transform.TransformPoint(stableWeaponLocalPosition);
+
+        Quaternion stableRotation =
+            transform.rotation *
+            Quaternion.Euler(stableWeaponLocalEuler);
+
+        Transform target = combat != null ? combat.CurrentTarget : null;
+        bool hasTarget = combat != null && combat.HasTargetInRange && target != null;
+
+        if (hasTarget)
+        {
+            Vector3 aimPoint = gun != null
+                ? gun.GetAimPoint()
+                : target.position + Vector3.up;
+
+            Vector3 aimDirection = aimPoint - stablePosition;
+            if (aimDirection.sqrMagnitude > 0.001f)
+            {
+                stableRotation =
+                    Quaternion.LookRotation(aimDirection.normalized, Vector3.up);
+            }
+        }
+
+        weaponPivot.SetPositionAndRotation(stablePosition, stableRotation);
+    }
+
     private void SetupTwoBoneIK()
     {
         if (animator == null || weaponPivot == null)
@@ -166,8 +281,12 @@ public class PlayerWeaponAim : MonoBehaviour
         Transform leftArm = FindBone("LeftArm");
         Transform leftForeArm = FindBone("LeftForeArm");
         Transform leftHand = FindBone("LeftHand");
+        Transform rightArm = FindBone("RightArm");
+        Transform rightForeArm = FindBone("RightForeArm");
+        Transform rightHand = FindBone("RightHand");
 
-        if (leftArm == null || leftForeArm == null || leftHand == null)
+        if (leftArm == null || leftForeArm == null || leftHand == null ||
+            rightArm == null || rightForeArm == null || rightHand == null)
         {
             Debug.LogWarning(
                 "[PlayerWeaponAim] Mixamo arm bones were not found. Two Bone IK was not created."
@@ -196,6 +315,7 @@ public class PlayerWeaponAim : MonoBehaviour
         }
 
         leftHint = FindOrCreateChild(rigTransform, "LeftElbowHint");
+        rightHint = FindOrCreateChild(rigTransform, "RightElbowHint");
 
         EnsureTwoBoneIK(
             rigTransform,
@@ -205,6 +325,16 @@ public class PlayerWeaponAim : MonoBehaviour
             leftHand,
             leftHandTarget,
             leftHint
+        );
+
+        EnsureTwoBoneIK(
+            rigTransform,
+            "RightHandIK",
+            rightArm,
+            rightForeArm,
+            rightHand,
+            rightHandTarget,
+            rightHint
         );
 
         bool alreadyAdded = false;
@@ -271,6 +401,15 @@ public class PlayerWeaponAim : MonoBehaviour
                 transform.right * 0.28f -
                 transform.forward * 0.18f;
         }
+
+        if (rightHint != null)
+        {
+            rightHint.position =
+                transform.position +
+                Vector3.up * 1.15f +
+                transform.right * 0.28f -
+                transform.forward * 0.18f;
+        }
     }
 
     private Transform FindBone(string boneName)
@@ -310,6 +449,23 @@ public class PlayerWeaponAim : MonoBehaviour
             {
                 return children[i];
             }
+
+            if (normalizedBoneName == "rightarm" &&
+                (name == "armr" || name == "upperarmr"))
+            {
+                return children[i];
+            }
+
+            if (normalizedBoneName == "rightforearm" &&
+                (name == "forearmr" || name == "lowerarmr"))
+            {
+                return children[i];
+            }
+
+            if (normalizedBoneName == "righthand" && name == "handr")
+            {
+                return children[i];
+            }
         }
 
         return null;
@@ -317,6 +473,12 @@ public class PlayerWeaponAim : MonoBehaviour
 
     private Transform FindRightHand()
     {
+        Transform rightHand = FindBone("RightHand");
+        if (rightHand != null)
+        {
+            return rightHand;
+        }
+
         Transform[] children = GetComponentsInChildren<Transform>(true);
         for (int i = 0; i < children.Length; i++)
         {

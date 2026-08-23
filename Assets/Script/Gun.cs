@@ -6,6 +6,11 @@ public class Gun : MonoBehaviour
     [SerializeField] private Transform muzzle;
     [SerializeField] private GameObject bulletPrefab;
     [SerializeField] private ObjectPool bulletPool;
+    [SerializeField] private ThirdPersonCamera cameraController;
+    [SerializeField] private GameObject muzzleFlashPrefab;
+    [SerializeField] private AudioSource audioSource;
+    [SerializeField] private AudioClip fireSound;
+    [SerializeField, Range(0f, 1f)] private float fireVolume = 1f;
 
     [Header("Weapon")]
     [SerializeField] private float bulletSpeed = 45f;
@@ -19,6 +24,8 @@ public class Gun : MonoBehaviour
     [SerializeField] private Vector3 targetOffset = new Vector3(0f, 1f, 0f);
 
     private Transform currentTarget;
+    private GameObject muzzleFlashInstance;
+    private ParticleSystem[] muzzleFlashParticles;
     private bool isFiring;
     private float fireTimer;
 
@@ -32,6 +39,52 @@ public class Gun : MonoBehaviour
         if (muzzle == null)
         {
             muzzle = transform;
+        }
+
+        if (cameraController == null)
+        {
+            cameraController =
+                FindObjectOfType<ThirdPersonCamera>();
+        }
+
+        if (audioSource == null)
+        {
+            audioSource = GetComponent<AudioSource>();
+        }
+
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
+        }
+
+        audioSource.playOnAwake = false;
+        audioSource.spatialBlend = 1f;
+
+        if (muzzleFlashPrefab != null)
+        {
+            muzzleFlashInstance =
+                Instantiate(muzzleFlashPrefab, muzzle);
+
+            muzzleFlashInstance.transform.localPosition = Vector3.zero;
+            muzzleFlashInstance.transform.localRotation = Quaternion.identity;
+            muzzleFlashParticles =
+                muzzleFlashInstance.GetComponentsInChildren<ParticleSystem>(true);
+            muzzleFlashInstance.SetActive(false);
+        }
+        else
+        {
+            Debug.LogWarning(
+                "[Gun] Muzzle Flash Prefab chưa được gán.",
+                this
+            );
+        }
+
+        if (fireSound == null)
+        {
+            Debug.LogWarning(
+                "[Gun] Fire Sound chưa được gán.",
+                this
+            );
         }
     }
 
@@ -61,6 +114,12 @@ public class Gun : MonoBehaviour
             return;
 
         if (currentTarget == null)
+            return;
+
+        EnemyHealth targetHealth =
+            currentTarget.GetComponentInParent<EnemyHealth>();
+
+        if (targetHealth == null || targetHealth.IsDead)
             return;
 
         if (bulletPrefab == null && bulletPool == null)
@@ -104,6 +163,36 @@ public class Gun : MonoBehaviour
 
             SpawnBullet(shotDirection.normalized);
         }
+
+        if (cameraController != null)
+        {
+            cameraController.Shake();
+        }
+
+        PlayMuzzleFlash();
+        PlayFireSound();
+    }
+
+    private void PlayMuzzleFlash()
+    {
+        if (muzzleFlashInstance == null)
+            return;
+
+        muzzleFlashInstance.SetActive(true);
+
+        foreach (ParticleSystem particleSystem in muzzleFlashParticles)
+        {
+            if (particleSystem != null)
+                particleSystem.Play(true);
+        }
+    }
+
+    private void PlayFireSound()
+    {
+        if (audioSource == null || fireSound == null)
+            return;
+
+        audioSource.PlayOneShot(fireSound, fireVolume);
     }
 
     private Vector3 GetTargetPoint()
