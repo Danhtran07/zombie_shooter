@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
+using UnityEngine.Serialization;
 
 public class ZombieSpawner : MonoBehaviour
 {
@@ -11,15 +12,25 @@ public class ZombieSpawner : MonoBehaviour
     [SerializeField] private Transform player;
     [SerializeField] private GameObject[] zombiePrefabs;
     [SerializeField] private ObjectPool[] zombiePools;
+    [SerializeField] private Transform[] spawnPoints;
 
     [Header("Spawn")]
-    [SerializeField] private int maxAliveZombies = 60;
+    [FormerlySerializedAs("maxAliveZombies")]
+    [SerializeField] private int maxZombies = 60;
     [SerializeField] private int spawnBurstCount = 3;
+
+    [FormerlySerializedAs("spawnDistanceMin")]
     [SerializeField] private float spawnDistanceMin = 14f;
+
+    [FormerlySerializedAs("spawnDistanceMax")]
     [SerializeField] private float spawnDistanceMax = 32f;
-    [SerializeField] private float spawnInterval = 0.8f;
-    [SerializeField] private float spawnIntervalMin = 0.15f;
-    [SerializeField] private float spawnIntervalRampPerMinute = 0.5f;
+
+    [SerializeField] private float spawnRate = 1.25f;
+
+    [SerializeField] private float maxSpawnRate = 6.5f;
+
+    [SerializeField] private float spawnRateIncreasePerMinute = 0.8f;
+
     [SerializeField] private int maxAliveIncreasePerMinute = 20;
 
     [Header("Difficulty")]
@@ -165,6 +176,11 @@ public class ZombieSpawner : MonoBehaviour
 
     private bool TryGetSpawnPosition(out Vector3 spawnPosition)
     {
+        if (TryGetSpawnPointPosition(out spawnPosition))
+        {
+            return true;
+        }
+
         Vector3 fallbackPosition = player.position;
 
         for (int i = 0; i < 16; i++)
@@ -200,6 +216,51 @@ public class ZombieSpawner : MonoBehaviour
         return true;
     }
 
+    private bool TryGetSpawnPointPosition(out Vector3 spawnPosition)
+    {
+        if (spawnPoints == null || spawnPoints.Length == 0)
+        {
+            spawnPosition = Vector3.zero;
+            return false;
+        }
+
+        for (int i = 0; i < spawnPoints.Length; i++)
+        {
+            Transform spawnPoint =
+                spawnPoints[Random.Range(0, spawnPoints.Length)];
+
+            if (spawnPoint == null)
+            {
+                continue;
+            }
+
+            float distanceSqr =
+                (spawnPoint.position - player.position).sqrMagnitude;
+
+            if (distanceSqr <
+                spawnDistanceMin * spawnDistanceMin)
+            {
+                continue;
+            }
+
+            if (NavMesh.SamplePosition(
+                    spawnPoint.position,
+                    out NavMeshHit hit,
+                    4f,
+                    NavMesh.AllAreas))
+            {
+                spawnPosition = hit.position;
+                return true;
+            }
+
+            spawnPosition = spawnPoint.position;
+            return true;
+        }
+
+        spawnPosition = Vector3.zero;
+        return false;
+    }
+
     private int GetCurrentMaxAlive()
     {
         int bonus =
@@ -208,19 +269,25 @@ public class ZombieSpawner : MonoBehaviour
                 maxAliveIncreasePerMinute
             );
 
-        return maxAliveZombies + bonus;
+        return maxZombies + bonus;
     }
 
     private float GetCurrentSpawnInterval()
     {
-        float reduction =
-            elapsed / 60f *
-            spawnIntervalRampPerMinute;
+        float currentSpawnRate =
+            Mathf.Min(
+                maxSpawnRate,
+                spawnRate +
+                elapsed / 60f *
+                spawnRateIncreasePerMinute
+            );
 
-        return Mathf.Max(
-            spawnIntervalMin,
-            spawnInterval - reduction
-        );
+        if (currentSpawnRate <= 0f)
+        {
+            return float.MaxValue;
+        }
+
+        return 1f / currentSpawnRate;
     }
 
     private float GetHealthMultiplier()

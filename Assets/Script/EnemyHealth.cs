@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Events;
 using System.Collections.Generic;
+using System;
 
 public class EnemyHealth : MonoBehaviour, IDamageable
 {
@@ -29,6 +30,7 @@ public class EnemyHealth : MonoBehaviour, IDamageable
     public bool IsDead => isDead;
     public int XpReward => xpReward;
     public static IReadOnlyList<EnemyHealth> Enemies => ActiveEnemies;
+    public static event Action<EnemyHealth> EnemyKilled;
 
     private void Awake()
     {
@@ -127,6 +129,7 @@ public class EnemyHealth : MonoBehaviour, IDamageable
         }
 
         onDeath.Invoke();
+        EnemyKilled?.Invoke(this);
 
         ZombieSpawner.NotifyZombieKilled(this);
 
