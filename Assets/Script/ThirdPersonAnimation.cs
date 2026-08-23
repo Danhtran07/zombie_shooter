@@ -47,9 +47,6 @@ public class ThirdPersonAnimation : MonoBehaviour
         bool isMoving =
             inputMagnitude > 0.01f;
 
-        bool isRunning =
-            Input.GetKey(KeyCode.LeftShift);
-
         float targetSpeed = 0f;
 
         // IDLE
@@ -59,15 +56,9 @@ public class ThirdPersonAnimation : MonoBehaviour
         }
 
         // RUN
-        else if (isRunning)
-        {
-            targetSpeed = 1f;
-        }
-
-        // WALK
         else
         {
-            targetSpeed = 0.5f;
+            targetSpeed = 1f;
         }
 
         // Smooth transition

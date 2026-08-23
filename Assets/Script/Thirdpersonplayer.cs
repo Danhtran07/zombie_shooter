@@ -5,7 +5,6 @@ using UnityEngine;
 public class ThirdPersonController : MonoBehaviour
 {
     [Header("Movement")]
-    [SerializeField] private float walkSpeed = 5f;
     [SerializeField] private float sprintSpeed = 8f;
 
     [Header("Rotation")]
@@ -185,10 +184,7 @@ public class ThirdPersonController : MonoBehaviour
 
     private void Move()
     {
-        float speed =
-            Input.GetKey(KeyCode.LeftShift)
-                ? sprintSpeed
-                : walkSpeed;
+        float speed = sprintSpeed;
 
         Vector3 velocity =
             rb.velocity;

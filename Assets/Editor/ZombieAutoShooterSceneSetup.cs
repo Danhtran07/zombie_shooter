@@ -421,7 +421,7 @@ public static class ZombieAutoShooterSceneSetup
         EnemyHealth health = EnsureComponent<EnemyHealth>(zombie);
         SetSerialized(health, "maxHealth", 35f);
         SetSerialized(health, "destroyOnDeath", true);
-        SetSerialized(health, "destroyDelay", 0.4f);
+        SetSerialized(health, "destroyDelay", 1.5f);
         SetSerialized(health, "xpReward", 1);
     }
 
