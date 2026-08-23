@@ -22,12 +22,15 @@ public class PlayerWeaponAim : MonoBehaviour
     [SerializeField] private Vector3 stableWeaponLocalEuler;
     [SerializeField] private bool stabilizeWeapon = true;
     [SerializeField] private bool applyGripOffsets = true;
+    [SerializeField] private float recoilReturnSpeed = 18f;
 
     private Transform leftHint;
     private Transform rightHint;
     private ThirdPersonController playerController;
     private Transform rightHandBone;
     private bool capturedStablePose;
+    private Vector3 recoilLocalPosition;
+    private Vector3 recoilLocalEuler;
 
     private void Reset()
     {
@@ -67,7 +70,39 @@ public class PlayerWeaponAim : MonoBehaviour
 
     private void LateUpdate()
     {
+        UpdateWeaponRecoil();
         StabilizeWeaponPose();
+    }
+
+    public void AddWeaponRecoil(
+        Vector3 positionKick,
+        Vector3 eulerKick,
+        float maxPositionKick = 0.18f,
+        float maxRotationKick = 9f)
+    {
+        recoilLocalPosition += positionKick;
+        recoilLocalEuler += eulerKick;
+
+        recoilLocalPosition = Vector3.ClampMagnitude(
+            recoilLocalPosition,
+            maxPositionKick
+        );
+
+        recoilLocalEuler.x = Mathf.Clamp(
+            recoilLocalEuler.x,
+            -maxRotationKick,
+            maxRotationKick
+        );
+        recoilLocalEuler.y = Mathf.Clamp(
+            recoilLocalEuler.y,
+            -maxRotationKick,
+            maxRotationKick
+        );
+        recoilLocalEuler.z = Mathf.Clamp(
+            recoilLocalEuler.z,
+            -maxRotationKick,
+            maxRotationKick
+        );
     }
 
     public void AttachGunToHand()
@@ -268,7 +303,26 @@ public class PlayerWeaponAim : MonoBehaviour
             }
         }
 
+        stablePosition += stableRotation * recoilLocalPosition;
+        stableRotation *= Quaternion.Euler(recoilLocalEuler);
+
         weaponPivot.SetPositionAndRotation(stablePosition, stableRotation);
+    }
+
+    private void UpdateWeaponRecoil()
+    {
+        float step = recoilReturnSpeed * Time.deltaTime;
+        recoilLocalPosition = Vector3.MoveTowards(
+            recoilLocalPosition,
+            Vector3.zero,
+            step * 0.025f
+        );
+
+        recoilLocalEuler = Vector3.MoveTowards(
+            recoilLocalEuler,
+            Vector3.zero,
+            step
+        );
     }
 
     private void SetupTwoBoneIK()

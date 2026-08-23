@@ -16,6 +16,12 @@ public static class ZombieAutoShooterSceneSetup
     private const string GeneratedFolder = "Assets/Generated/ZombieAutoShooter";
     private const string MuzzleFlashPrefabPath =
         "Assets/JMO Assets/WarFX/_Effects/MuzzleFlashes/4Planes/WFX_MF 4P RIFLE1.prefab";
+    private const string EnemyImpactPrefabPath =
+        "Assets/JMO Assets/WarFX/_Effects (Mobile)/Bullet Impacts/WFXMR_BImpact SoftBody.prefab";
+    private const string WorldImpactPrefabPath =
+        "Assets/JMO Assets/WarFX/_Effects (Mobile)/Bullet Impacts/WFXMR_BImpact Concrete.prefab";
+    private const string GunshotPath =
+        "Assets/Sound/gun_shot_for_game_so_#1-1787500463038 (mp3cut.net).mp3";
     private const string ZombiePrefabPath = GeneratedFolder + "/ZombieRuntime.prefab";
 
     [MenuItem("Tools/Zombie Auto Shooter/Build Main Scene")]
@@ -45,12 +51,28 @@ public static class ZombieAutoShooterSceneSetup
         GameObject systems = FindOrCreateRoot("ZombieAutoShooter_Setup");
         ObjectPool bulletPool = SetupPool(systems.transform, "BulletPool", bulletPrefab, 64, 256);
         ObjectPool zombiePool = SetupPool(systems.transform, "ZombiePool", zombiePrefab, 24, 160);
+        ObjectPool enemyImpactPool = SetupPool(
+            systems.transform,
+            "EnemyImpactPool",
+            AssetDatabase.LoadAssetAtPath<GameObject>(EnemyImpactPrefabPath),
+            20,
+            80
+        );
+        ObjectPool worldImpactPool = SetupPool(
+            systems.transform,
+            "WorldImpactPool",
+            AssetDatabase.LoadAssetAtPath<GameObject>(WorldImpactPrefabPath),
+            16,
+            64
+        );
+        SetupImpactFeedback(systems, enemyImpactPool, worldImpactPool);
 
         if (gun != null)
         {
             SetSerialized(gun, "bulletPool", bulletPool);
             SetSerialized(gun, "bulletSpeed", 45f);
             SetSerialized(gun, "fireRate", 0.08f);
+            SetSerialized(gun, "fireSound", AssetDatabase.LoadAssetAtPath<AudioClip>(GunshotPath));
         }
 
         Transform[] spawnPoints = SetupSpawnPoints(systems.transform, player.transform.position);
@@ -250,6 +272,7 @@ public static class ZombieAutoShooterSceneSetup
         SetSerialized(gun, "bulletSpeed", 45f);
         SetSerialized(gun, "fireRate", 0.08f);
         SetSerialized(gun, "damage", 12f);
+        SetSerialized(gun, "fireSound", AssetDatabase.LoadAssetAtPath<AudioClip>(GunshotPath));
 
         PlayerCombat combat = EnsureComponent<PlayerCombat>(player);
         SetSerialized(combat, "gun", gun);
@@ -470,6 +493,21 @@ public static class ZombieAutoShooterSceneSetup
         SetSerialized(health, "destroyOnDeath", true);
         SetSerialized(health, "destroyDelay", 1.5f);
         SetSerialized(health, "xpReward", 1);
+        SetSerialized(health, "headshotHeightRatio", 0.72f);
+        SetSerialized(health, "hitReactionDuration", 0.09f);
+    }
+
+    private static BulletImpactFeedback SetupImpactFeedback(
+        GameObject systems,
+        ObjectPool enemyImpactPool,
+        ObjectPool worldImpactPool)
+    {
+        BulletImpactFeedback feedback = EnsureComponent<BulletImpactFeedback>(systems);
+        SetSerialized(feedback, "enemyImpactPool", enemyImpactPool);
+        SetSerialized(feedback, "worldImpactPool", worldImpactPool);
+        SetSerialized(feedback, "impactVolume", 0.72f);
+        SetSerialized(feedback, "headshotVolume", 1f);
+        return feedback;
     }
 
     private static ObjectPool SetupPool(
@@ -579,6 +617,7 @@ public static class ZombieAutoShooterSceneSetup
         Text kill = CreateHudText(canvasObject.transform, "KillText", font, new Vector2(12f, -102f));
         Text wave = CreateHudText(canvasObject.transform, "WaveText", font, new Vector2(12f, -132f));
         Text timer = CreateHudText(canvasObject.transform, "TimerText", font, new Vector2(12f, -162f));
+        Text feedback = CreateCenterFeedbackText(canvasObject.transform, font);
 
         SetSerialized(hud, "session", session);
         SetSerialized(hud, "hpText", hp);
@@ -587,6 +626,7 @@ public static class ZombieAutoShooterSceneSetup
         SetSerialized(hud, "killText", kill);
         SetSerialized(hud, "waveText", wave);
         SetSerialized(hud, "timerText", timer);
+        SetSerialized(hud, "feedbackText", feedback);
     }
 
     private static Text CreateHudText(
@@ -612,6 +652,32 @@ public static class ZombieAutoShooterSceneSetup
         rect.pivot = new Vector2(0f, 1f);
         rect.anchoredPosition = anchoredPosition;
         rect.sizeDelta = new Vector2(260f, 28f);
+
+        return text;
+    }
+
+    private static Text CreateCenterFeedbackText(Transform parent, Font font)
+    {
+        Transform existing = parent.Find("FeedbackText");
+        GameObject textObject =
+            existing != null ? existing.gameObject : new GameObject("FeedbackText");
+
+        textObject.transform.SetParent(parent, false);
+        Text text = EnsureComponent<Text>(textObject);
+        text.font = font;
+        text.fontSize = 30;
+        text.fontStyle = FontStyle.Bold;
+        text.alignment = TextAnchor.MiddleCenter;
+        text.color = new Color(1f, 0.88f, 0.18f, 1f);
+        text.raycastTarget = false;
+        text.enabled = false;
+
+        RectTransform rect = text.GetComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = new Vector2(0f, 76f);
+        rect.sizeDelta = new Vector2(360f, 48f);
 
         return text;
     }

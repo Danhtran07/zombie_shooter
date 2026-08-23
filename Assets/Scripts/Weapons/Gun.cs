@@ -7,6 +7,7 @@ public class Gun : MonoBehaviour
     [SerializeField] private GameObject bulletPrefab;
     [SerializeField] private ObjectPool bulletPool;
     [SerializeField] private ThirdPersonCamera cameraController;
+    [SerializeField] private PlayerWeaponAim weaponAim;
     [SerializeField] private GameObject muzzleFlashPrefab;
     [SerializeField] private AudioSource audioSource;
     [SerializeField] private AudioClip fireSound;
@@ -22,6 +23,13 @@ public class Gun : MonoBehaviour
     [SerializeField, Range(0f, 1f)] private float criticalChance = 0f;
     [SerializeField] private float criticalDamageMultiplier = 2f;
     [SerializeField] private Vector3 targetOffset = new Vector3(0f, 1f, 0f);
+    [SerializeField] private float cameraRecoilPitch = 1.15f;
+    [SerializeField] private float cameraRecoilYaw = 0.45f;
+    [SerializeField] private float cameraRecoilRoll = 0.55f;
+    [SerializeField] private Vector3 weaponRecoilPosition =
+        new Vector3(0f, -0.015f, -0.085f);
+    [SerializeField] private Vector3 weaponRecoilEuler =
+        new Vector3(-4.5f, 0f, 1.25f);
 
     private Transform currentTarget;
     private GunEffects effects;
@@ -45,6 +53,11 @@ public class Gun : MonoBehaviour
         {
             cameraController =
                 FindObjectOfType<ThirdPersonCamera>();
+        }
+
+        if (weaponAim == null)
+        {
+            weaponAim = GetComponentInParent<PlayerWeaponAim>();
         }
 
         if (audioSource == null)
@@ -96,11 +109,18 @@ public class Gun : MonoBehaviour
 
     public void SetFiring(bool firing)
     {
+        bool wasFiring = isFiring;
         isFiring = firing;
 
         if (!firing)
         {
             fireTimer = 0f;
+            return;
+        }
+
+        if (!wasFiring)
+        {
+            fireTimer = Mathf.Min(fireTimer, 0f);
         }
     }
 
@@ -111,6 +131,8 @@ public class Gun : MonoBehaviour
 
     private void Update()
     {
+        effects?.Tick(Time.deltaTime);
+
         if (!isFiring)
             return;
 
@@ -167,7 +189,25 @@ public class Gun : MonoBehaviour
 
         if (cameraController != null)
         {
-            cameraController.Shake();
+            float side = Random.value < 0.5f ? -1f : 1f;
+            cameraController.AddRecoil(
+                cameraRecoilPitch,
+                cameraRecoilYaw * side,
+                cameraRecoilRoll * -side
+            );
+        }
+
+        if (weaponAim != null)
+        {
+            float side = Random.value < 0.5f ? -1f : 1f;
+            weaponAim.AddWeaponRecoil(
+                weaponRecoilPosition,
+                new Vector3(
+                    weaponRecoilEuler.x,
+                    weaponRecoilEuler.y * side,
+                    weaponRecoilEuler.z * side
+                )
+            );
         }
 
         effects?.Play();

@@ -25,11 +25,15 @@ public class ThirdPersonCamera : MonoBehaviour
     [Header("Camera Shake")]
     [SerializeField] private float shakeDuration = 0.06f;
     [SerializeField] private float shakeStrength = 0.035f;
+    [SerializeField] private float recoilRecovery = 18f;
+    [SerializeField] private float recoilMaxPitch = 6f;
+    [SerializeField] private float recoilMaxYaw = 3f;
 
     private float yaw;
     private float pitch;
     private float shakeTimer;
     private float shakeAmount;
+    private Vector3 recoilAngles;
 
     private void Start()
     {
@@ -92,9 +96,9 @@ public class ThirdPersonCamera : MonoBehaviour
     private void UpdateCamera()
     {
         Quaternion rotation = Quaternion.Euler(
-            pitch,
-            yaw,
-            0f
+            pitch + recoilAngles.x,
+            yaw + recoilAngles.y,
+            recoilAngles.z
         );
 
         Vector3 targetPosition =
@@ -155,6 +159,12 @@ public class ThirdPersonCamera : MonoBehaviour
 
             shakeTimer -= Time.deltaTime;
         }
+
+        recoilAngles = Vector3.MoveTowards(
+            recoilAngles,
+            Vector3.zero,
+            recoilRecovery * Time.deltaTime
+        );
     }
 
     // =========================================================
@@ -188,5 +198,29 @@ public class ThirdPersonCamera : MonoBehaviour
     {
         shakeTimer = shakeDuration;
         shakeAmount = shakeStrength;
+    }
+
+    public void AddRecoil(float pitchKick, float yawKick, float rollKick)
+    {
+        recoilAngles.x = Mathf.Clamp(
+            recoilAngles.x - Mathf.Abs(pitchKick),
+            -recoilMaxPitch,
+            recoilMaxPitch
+        );
+
+        recoilAngles.y = Mathf.Clamp(
+            recoilAngles.y + yawKick,
+            -recoilMaxYaw,
+            recoilMaxYaw
+        );
+
+        recoilAngles.z = Mathf.Clamp(
+            recoilAngles.z + rollKick,
+            -recoilMaxYaw,
+            recoilMaxYaw
+        );
+
+        shakeTimer = shakeDuration;
+        shakeAmount = Mathf.Max(shakeAmount, shakeStrength);
     }
 }

@@ -10,6 +10,9 @@ public class SimpleGameplayHUD : MonoBehaviour
     [SerializeField] private Text killText;
     [SerializeField] private Text waveText;
     [SerializeField] private Text timerText;
+    [SerializeField] private Text feedbackText;
+
+    private float feedbackTimer;
 
     private void Awake()
     {
@@ -17,6 +20,16 @@ public class SimpleGameplayHUD : MonoBehaviour
         {
             session = FindObjectOfType<ZombieGameSession>();
         }
+    }
+
+    private void OnEnable()
+    {
+        EnemyHealth.EnemyDamaged += HandleEnemyDamaged;
+    }
+
+    private void OnDisable()
+    {
+        EnemyHealth.EnemyDamaged -= HandleEnemyDamaged;
     }
 
     private void Update()
@@ -60,5 +73,49 @@ public class SimpleGameplayHUD : MonoBehaviour
             int seconds = Mathf.FloorToInt(session.Elapsed);
             timerText.text = $"Time: {seconds / 60:00}:{seconds % 60:00}";
         }
+
+        UpdateFeedbackText();
+    }
+
+    private void HandleEnemyDamaged(
+        EnemyHealth enemy,
+        float damage,
+        bool headshot,
+        bool killed)
+    {
+        if (feedbackText == null)
+        {
+            return;
+        }
+
+        feedbackTimer = killed || headshot ? 0.42f : 0.16f;
+        feedbackText.text = killed
+            ? headshot ? "HEADSHOT KILL" : "KILL"
+            : headshot ? "HEADSHOT" : Mathf.CeilToInt(damage).ToString();
+
+        feedbackText.fontSize = killed ? 34 : headshot ? 30 : 22;
+        feedbackText.color = killed || headshot
+            ? new Color(1f, 0.88f, 0.18f, 1f)
+            : new Color(1f, 1f, 1f, 0.95f);
+        feedbackText.enabled = true;
+    }
+
+    private void UpdateFeedbackText()
+    {
+        if (feedbackText == null || !feedbackText.enabled)
+        {
+            return;
+        }
+
+        feedbackTimer -= Time.deltaTime;
+        if (feedbackTimer <= 0f)
+        {
+            feedbackText.enabled = false;
+            return;
+        }
+
+        Color color = feedbackText.color;
+        color.a = Mathf.Clamp01(feedbackTimer * 4f);
+        feedbackText.color = color;
     }
 }

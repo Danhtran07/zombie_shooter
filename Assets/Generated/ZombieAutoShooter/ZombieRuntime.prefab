@@ -1076,6 +1076,11 @@ MonoBehaviour:
   destroyOnDeath: 1
   destroyDelay: 1.5
   xpReward: 1
+  headshotHeightRatio: 0.72
+  hitReactionDuration: 0.09
+  killReactionScale: 0.16
+  hitFlashColor: {r: 1, g: 0.16, b: 0.08, a: 1}
+  headshotFlashColor: {r: 1, g: 0.92, b: 0.2, a: 1}
   onDeath:
     m_PersistentCalls:
       m_Calls: []

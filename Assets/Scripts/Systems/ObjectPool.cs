@@ -92,6 +92,12 @@ public class ObjectPool : MonoBehaviour
 
         pooledObject.SetPool(this);
 
+        if (instance.GetComponentInChildren<ParticleSystem>(true) != null &&
+            instance.GetComponent<PooledEffectAutoRelease>() == null)
+        {
+            instance.AddComponent<PooledEffectAutoRelease>();
+        }
+
         return instance;
     }
 }

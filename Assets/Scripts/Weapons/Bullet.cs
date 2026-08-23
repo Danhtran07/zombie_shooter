@@ -6,10 +6,13 @@ public class Bullet : MonoBehaviour
 {
     [SerializeField] private float damage = 10f;
     [SerializeField] private float lifetime = 5f;
+    [SerializeField] private float headshotDamageMultiplier = 1.8f;
 
     private Rigidbody rb;
     private PooledObject pooledObject;
+    private Collider[] bulletColliders;
     private GameObject owner;
+    private Vector3 travelDirection;
     private bool hasHit;
 
     private void Awake()
@@ -21,8 +24,7 @@ public class Bullet : MonoBehaviour
         rb.collisionDetectionMode =
             CollisionDetectionMode.ContinuousDynamic;
 
-        Collider[] bulletColliders =
-            GetComponentsInChildren<Collider>();
+        bulletColliders = GetComponentsInChildren<Collider>();
 
         foreach (Collider bulletCollider in bulletColliders)
         {
@@ -42,6 +44,7 @@ public class Bullet : MonoBehaviour
         owner = bulletOwner;
         damage = damageAmount;
         lifetime = lifeTime;
+        travelDirection = direction;
         hasHit = false;
 
         transform.SetPositionAndRotation(
@@ -67,9 +70,6 @@ public class Bullet : MonoBehaviour
     {
         if (owner == null)
             return;
-
-        Collider[] bulletColliders =
-            GetComponentsInChildren<Collider>();
 
         Collider[] ownerColliders =
             owner.GetComponentsInChildren<Collider>();
@@ -120,7 +120,7 @@ public class Bullet : MonoBehaviour
         ProcessHit(
             other,
             hitPoint,
-            direction
+            direction.sqrMagnitude > 0.001f ? -direction : -travelDirection
         );
     }
 
@@ -151,16 +151,36 @@ public class Bullet : MonoBehaviour
         if (enemy == null || enemy.IsDead)
         {
             hasHit = true;
+            BulletImpactFeedback.Instance?.Play(
+                hitPoint,
+                hitDirection,
+                false,
+                false,
+                false
+            );
             Expire();
             return;
         }
 
         hasHit = true;
+        bool headshot = enemy.IsHeadshotPoint(hitCollider, hitPoint);
+        float finalDamage = headshot
+            ? damage * headshotDamageMultiplier
+            : damage;
 
         enemy.TakeDamage(
-            damage,
+            finalDamage,
             hitPoint,
-            hitDirection
+            travelDirection,
+            headshot
+        );
+
+        BulletImpactFeedback.Instance?.Play(
+            hitPoint,
+            -travelDirection,
+            true,
+            headshot,
+            enemy.IsDead
         );
 
         Expire();
@@ -187,9 +207,6 @@ public class Bullet : MonoBehaviour
     {
         if (other == null)
             return;
-
-        Collider[] bulletColliders =
-            GetComponentsInChildren<Collider>();
 
         foreach (Collider bulletCollider in bulletColliders)
         {
