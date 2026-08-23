@@ -31,6 +31,7 @@ public static class ZombieAutoShooterSceneSetup
         }
 
         SetupPlayer(player);
+        RemoveMissingScripts(player);
 
         Camera camera = UnityEngine.Object.FindFirstObjectByType<Camera>();
         SetupCamera(camera, player.transform);
@@ -125,7 +126,7 @@ public static class ZombieAutoShooterSceneSetup
         EditorSceneManager.SaveScene(scene);
         AssetDatabase.SaveAssets();
 
-        Debug.Log("[ZombieAutoShooterSceneSetup] Player aim IK wired on Player/AutoWeapon.");
+        Debug.Log("[ZombieAutoShooterSceneSetup] Player weapon aim wired to the right-hand gun socket.");
     }
 
     private static GameObject FindPlayer()
@@ -162,7 +163,6 @@ public static class ZombieAutoShooterSceneSetup
         rb.collisionDetectionMode = CollisionDetectionMode.Continuous;
         rb.constraints =
             RigidbodyConstraints.FreezeRotationX |
-            RigidbodyConstraints.FreezeRotationY |
             RigidbodyConstraints.FreezeRotationZ;
 
         CapsuleCollider capsule = EnsureComponent<CapsuleCollider>(player);
@@ -202,7 +202,16 @@ public static class ZombieAutoShooterSceneSetup
         {
             GameObject akPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Weapon/AK47/AK47.fbx");
             GameObject weaponRoot = new GameObject("AutoWeapon");
-            weaponRoot.transform.SetParent(player.transform);
+            Transform hand = FindRightHand(player.transform);
+            if (hand == null)
+            {
+                UnityEngine.Object.DestroyImmediate(weaponRoot);
+                throw new InvalidOperationException(
+                    "Right-hand bone was not found. Cannot attach AutoWeapon to Player."
+                );
+            }
+
+            weaponRoot.transform.SetParent(hand, false);
             weaponRoot.transform.localPosition = new Vector3(0.35f, 1.1f, 0.55f);
             weaponRoot.transform.localRotation = Quaternion.identity;
 
@@ -258,11 +267,6 @@ public static class ZombieAutoShooterSceneSetup
             return;
         }
 
-        Transform rightHand = FindOrCreateChild(weaponPivot, "RightHandTarget");
-        rightHand.localPosition = new Vector3(0.06f, -0.05f, 0.04f);
-        rightHand.localRotation = Quaternion.Euler(0f, 0f, -90f);
-        rightHand.localScale = Vector3.one;
-
         Transform leftHand = FindOrCreateChild(weaponPivot, "LeftHandTarget");
         leftHand.localPosition = new Vector3(0.05f, -0.03f, 0.32f);
         leftHand.localRotation = Quaternion.Euler(0f, 0f, -90f);
@@ -272,8 +276,16 @@ public static class ZombieAutoShooterSceneSetup
         SetSerialized(aim, "animator", animator);
         SetSerialized(aim, "gun", gun);
         SetSerialized(aim, "weaponPivot", weaponPivot);
-        SetSerialized(aim, "rightHandTarget", rightHand);
         SetSerialized(aim, "leftHandTarget", leftHand);
+        aim.AttachGunToHand();
+
+        if (gun.transform.parent == null ||
+            gun.transform.parent == player.transform)
+        {
+            throw new InvalidOperationException(
+                "Gun was not attached to a right-hand bone."
+            );
+        }
     }
 
     private static GameObject LoadBulletPrefab()
@@ -662,6 +674,38 @@ public static class ZombieAutoShooterSceneSetup
         GameObject go = new GameObject(name);
         go.transform.SetParent(parent, false);
         return go.transform;
+    }
+
+    private static void RemoveMissingScripts(GameObject root)
+    {
+        GameObjectUtility.RemoveMonoBehavioursWithMissingScript(root);
+
+        for (int i = 0; i < root.transform.childCount; i++)
+        {
+            RemoveMissingScripts(root.transform.GetChild(i).gameObject);
+        }
+    }
+
+    private static Transform FindRightHand(Transform root)
+    {
+        Transform[] children = root.GetComponentsInChildren<Transform>(true);
+        for (int i = 0; i < children.Length; i++)
+        {
+            string name = children[i].name
+                .Replace("_", string.Empty)
+                .Replace(".", string.Empty)
+                .Replace(":", string.Empty)
+                .ToLowerInvariant();
+
+            if (name == "righthand" ||
+                name == "handr" ||
+                name.EndsWith("righthand"))
+            {
+                return children[i];
+            }
+        }
+
+        return null;
     }
 
     private static T EnsureComponent<T>(GameObject go)

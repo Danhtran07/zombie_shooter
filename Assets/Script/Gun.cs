@@ -16,7 +16,6 @@ public class Gun : MonoBehaviour
     [SerializeField] private float spreadAngle = 6f;
     [SerializeField, Range(0f, 1f)] private float criticalChance = 0f;
     [SerializeField] private float criticalDamageMultiplier = 2f;
-    [SerializeField] private float aimTurnSpeed = 30f;
     [SerializeField] private Vector3 targetOffset = new Vector3(0f, 1f, 0f);
 
     private Transform currentTarget;

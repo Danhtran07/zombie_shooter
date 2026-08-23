@@ -24,6 +24,8 @@ public class ThirdPersonController : MonoBehaviour
     private float verticalInput;
 
     private Vector3 moveDirection;
+    private Vector3 aimDirection;
+    private bool hasAimDirection;
 
     private bool jumpRequested;
 
@@ -47,11 +49,29 @@ public class ThirdPersonController : MonoBehaviour
         rb.collisionDetectionMode =
             CollisionDetectionMode.Continuous;
 
-        // FREEZE TẤT CẢ ROTATION
+        // Aim controls yaw through MoveRotation; physics still owns position.
         rb.constraints =
             RigidbodyConstraints.FreezeRotationX |
-            RigidbodyConstraints.FreezeRotationY |
             RigidbodyConstraints.FreezeRotationZ;
+    }
+
+    public void SetAimDirection(Vector3 direction)
+    {
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude <= 0.001f)
+        {
+            hasAimDirection = false;
+            return;
+        }
+
+        aimDirection = direction.normalized;
+        hasAimDirection = true;
+    }
+
+    public void ClearAimDirection()
+    {
+        hasAimDirection = false;
     }
 
     private void Update()
@@ -190,14 +210,18 @@ public class ThirdPersonController : MonoBehaviour
 
     private void Rotate()
     {
-        if (moveDirection.sqrMagnitude < 0.001f)
+        Vector3 facingDirection = hasAimDirection
+            ? aimDirection
+            : moveDirection;
+
+        if (facingDirection.sqrMagnitude < 0.001f)
         {
             return;
         }
 
         Quaternion targetRotation =
             Quaternion.LookRotation(
-                moveDirection,
+                facingDirection,
                 Vector3.up
             );
 

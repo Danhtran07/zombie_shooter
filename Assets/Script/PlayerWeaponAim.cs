@@ -9,26 +9,17 @@ public class PlayerWeaponAim : MonoBehaviour
     [SerializeField] private Gun gun;
     [SerializeField] private Animator animator;
     [SerializeField] private Transform weaponPivot;
-    [SerializeField] private Transform rightHandTarget;
     [SerializeField] private Transform leftHandTarget;
+    [SerializeField] private Transform aimTarget;
 
     [Header("Gun Aim")]
-    [SerializeField] private float aimTurnSpeed = 12f;
-    [SerializeField] private float restReturnSpeed = 8f;
-    [SerializeField] private float maxYawFromBody = 80f;
-
-    [Header("Hand Grip")]
-    [SerializeField] private Vector3 rightHandLocalPosition = new Vector3(0.06f, -0.05f, 0.04f);
-    [SerializeField] private Vector3 rightHandLocalEuler = new Vector3(0f, 0f, -90f);
     [SerializeField] private Vector3 leftHandLocalPosition = new Vector3(0.05f, -0.03f, 0.32f);
     [SerializeField] private Vector3 leftHandLocalEuler = new Vector3(0f, 0f, -90f);
     [SerializeField] private bool applyGripOffsets = true;
 
-    private Quaternion restLocalRotation;
-    private Vector3 restLocalPosition;
-    private bool hasRestPose;
-    private Transform rightHint;
     private Transform leftHint;
+    private ThirdPersonController playerController;
+    private Transform rightHandBone;
 
     private void Reset()
     {
@@ -38,18 +29,40 @@ public class PlayerWeaponAim : MonoBehaviour
     private void Awake()
     {
         ResolveReferences();
+        AttachGunToHand();
         EnsureWeaponTargets();
-        CaptureRestPose();
         SetupTwoBoneIK();
     }
 
     private void Update()
     {
         ResolveReferences();
+        AttachGunToHand();
         EnsureWeaponTargets();
         UpdateGripTargets();
-        UpdateGunAim();
+        UpdateAim();
         UpdateElbowHints();
+    }
+
+    public void AttachGunToHand()
+    {
+        if (gun == null)
+        {
+            return;
+        }
+
+        rightHandBone = FindRightHand();
+        if (rightHandBone == null)
+        {
+            return;
+        }
+
+        if (!gun.transform.IsChildOf(rightHandBone))
+        {
+            gun.transform.SetParent(rightHandBone, true);
+        }
+
+        weaponPivot = gun.transform;
     }
 
     private void ResolveReferences()
@@ -78,18 +91,16 @@ public class PlayerWeaponAim : MonoBehaviour
         {
             weaponPivot = combat.WeaponPivot;
         }
-    }
 
-    private void CaptureRestPose()
-    {
-        if (weaponPivot == null || hasRestPose)
+        if (playerController == null)
         {
-            return;
+            playerController = GetComponent<ThirdPersonController>();
         }
 
-        restLocalRotation = weaponPivot.localRotation;
-        restLocalPosition = weaponPivot.localPosition;
-        hasRestPose = true;
+        if (aimTarget == null)
+        {
+            aimTarget = FindOrCreateChild(transform, "AimTarget");
+        }
     }
 
     private void EnsureWeaponTargets()
@@ -97,13 +108,6 @@ public class PlayerWeaponAim : MonoBehaviour
         if (weaponPivot == null)
         {
             return;
-        }
-
-        if (rightHandTarget == null)
-        {
-            rightHandTarget = FindOrCreateChild(weaponPivot, "RightHandTarget");
-            rightHandTarget.localPosition = rightHandLocalPosition;
-            rightHandTarget.localRotation = Quaternion.Euler(rightHandLocalEuler);
         }
 
         if (leftHandTarget == null)
@@ -121,12 +125,6 @@ public class PlayerWeaponAim : MonoBehaviour
             return;
         }
 
-        if (rightHandTarget != null)
-        {
-            rightHandTarget.localPosition = rightHandLocalPosition;
-            rightHandTarget.localRotation = Quaternion.Euler(rightHandLocalEuler);
-        }
-
         if (leftHandTarget != null)
         {
             leftHandTarget.localPosition = leftHandLocalPosition;
@@ -134,57 +132,28 @@ public class PlayerWeaponAim : MonoBehaviour
         }
     }
 
-    private void UpdateGunAim()
+    private void UpdateAim()
     {
-        CaptureRestPose();
-
-        if (weaponPivot == null)
-        {
-            return;
-        }
-
-        bool hasTarget = combat != null && combat.HasTargetInRange && combat.CurrentTarget != null;
-
+        Transform target = combat != null ? combat.CurrentTarget : null;
+        bool hasTarget = combat != null && combat.HasTargetInRange && target != null;
         if (!hasTarget)
         {
-            weaponPivot.localRotation = Quaternion.Slerp(
-                weaponPivot.localRotation,
-                restLocalRotation,
-                restReturnSpeed * Time.deltaTime
-            );
-            weaponPivot.localPosition = restLocalPosition;
+            playerController?.ClearAimDirection();
             return;
         }
 
         Vector3 aimPoint = gun != null
             ? gun.GetAimPoint()
-            : combat.CurrentTarget.position + Vector3.up;
+            : target.position + Vector3.up;
 
-        Vector3 worldDirection = aimPoint - weaponPivot.position;
-        if (worldDirection.sqrMagnitude < 0.0001f)
+        if (aimTarget != null)
         {
-            return;
+            aimTarget.position = aimPoint;
         }
 
-        Quaternion targetRotation = GetClampedAimRotation(worldDirection.normalized);
-        weaponPivot.rotation = Quaternion.Slerp(
-            weaponPivot.rotation,
-            targetRotation,
-            aimTurnSpeed * Time.deltaTime
-        );
-    }
-
-    private Quaternion GetClampedAimRotation(Vector3 worldDirection)
-    {
-        Vector3 localDirection = transform.InverseTransformDirection(worldDirection);
-        float yaw = Mathf.Atan2(localDirection.x, localDirection.z) * Mathf.Rad2Deg;
-        float pitch = -Mathf.Asin(Mathf.Clamp(localDirection.y, -1f, 1f)) * Mathf.Rad2Deg;
-
-        yaw = Mathf.Clamp(yaw, -maxYawFromBody, maxYawFromBody);
-        pitch = Mathf.Clamp(pitch, -35f, 45f);
-
-        Vector3 clampedLocal = Quaternion.Euler(pitch, yaw, 0f) * Vector3.forward;
-        return Quaternion.LookRotation(transform.TransformDirection(clampedLocal), Vector3.up);
+        Vector3 bodyDirection = aimPoint - transform.position;
+        bodyDirection.y = 0f;
+        playerController?.SetAimDirection(bodyDirection);
     }
 
     private void SetupTwoBoneIK()
@@ -194,15 +163,11 @@ public class PlayerWeaponAim : MonoBehaviour
             return;
         }
 
-        Transform rightArm = FindBone("RightArm");
-        Transform rightForeArm = FindBone("RightForeArm");
-        Transform rightHand = FindBone("RightHand");
         Transform leftArm = FindBone("LeftArm");
         Transform leftForeArm = FindBone("LeftForeArm");
         Transform leftHand = FindBone("LeftHand");
 
-        if (rightArm == null || rightForeArm == null || rightHand == null ||
-            leftArm == null || leftForeArm == null || leftHand == null)
+        if (leftArm == null || leftForeArm == null || leftHand == null)
         {
             Debug.LogWarning(
                 "[PlayerWeaponAim] Mixamo arm bones were not found. Two Bone IK was not created."
@@ -230,18 +195,7 @@ public class PlayerWeaponAim : MonoBehaviour
             rig = rigTransform.gameObject.AddComponent<Rig>();
         }
 
-        rightHint = FindOrCreateChild(rigTransform, "RightElbowHint");
         leftHint = FindOrCreateChild(rigTransform, "LeftElbowHint");
-
-        EnsureTwoBoneIK(
-            rigTransform,
-            "RightHandIK",
-            rightArm,
-            rightForeArm,
-            rightHand,
-            rightHandTarget,
-            rightHint
-        );
 
         EnsureTwoBoneIK(
             rigTransform,
@@ -309,15 +263,6 @@ public class PlayerWeaponAim : MonoBehaviour
 
     private void UpdateElbowHints()
     {
-        if (rightHint != null)
-        {
-            rightHint.position =
-                transform.position +
-                Vector3.up * 1.15f +
-                transform.right * 0.28f -
-                transform.forward * 0.18f;
-        }
-
         if (leftHint != null)
         {
             leftHint.position =
@@ -331,12 +276,59 @@ public class PlayerWeaponAim : MonoBehaviour
     private Transform FindBone(string boneName)
     {
         Transform[] children = GetComponentsInChildren<Transform>(true);
+        string normalizedBoneName = boneName
+            .Replace("_", string.Empty)
+            .ToLowerInvariant();
+
         for (int i = 0; i < children.Length; i++)
         {
-            string name = children[i].name;
-            if (name == boneName ||
-                name == "mixamorig:" + boneName ||
-                name.EndsWith(boneName))
+            string name = children[i].name
+                .Replace("_", string.Empty)
+                .Replace(".", string.Empty)
+                .Replace(":", string.Empty)
+                .ToLowerInvariant();
+
+            if (name == normalizedBoneName ||
+                name.EndsWith(normalizedBoneName))
+            {
+                return children[i];
+            }
+
+            if (normalizedBoneName == "leftarm" &&
+                (name == "arml" || name == "upperarml"))
+            {
+                return children[i];
+            }
+
+            if (normalizedBoneName == "leftforearm" &&
+                (name == "forearml" || name == "lowerarml"))
+            {
+                return children[i];
+            }
+
+            if (normalizedBoneName == "lefthand" && name == "handl")
+            {
+                return children[i];
+            }
+        }
+
+        return null;
+    }
+
+    private Transform FindRightHand()
+    {
+        Transform[] children = GetComponentsInChildren<Transform>(true);
+        for (int i = 0; i < children.Length; i++)
+        {
+            string normalizedName = children[i].name
+                .Replace("_", string.Empty)
+                .Replace(".", string.Empty)
+                .Replace(":", string.Empty)
+                .ToLowerInvariant();
+
+            if (normalizedName == "righthand" ||
+                normalizedName == "handr" ||
+                normalizedName.EndsWith("righthand"))
             {
                 return children[i];
             }
