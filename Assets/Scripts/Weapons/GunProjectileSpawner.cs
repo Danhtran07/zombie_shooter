@@ -37,9 +37,11 @@ public sealed class GunProjectileSpawner
     public void Spawn(Vector3 direction)
     {
         Quaternion rotation = Quaternion.LookRotation(direction);
+        Vector3 spawnPosition = muzzle.position;
+
         GameObject bulletObject = bulletPool != null
-            ? bulletPool.Spawn(muzzle.position, rotation)
-            : Object.Instantiate(bulletPrefab, muzzle.position, rotation);
+            ? bulletPool.Spawn(spawnPosition, rotation)
+            : Object.Instantiate(bulletPrefab, spawnPosition, rotation);
 
         if (bulletObject == null)
         {

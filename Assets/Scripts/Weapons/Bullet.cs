@@ -38,15 +38,26 @@ public class Bullet : MonoBehaviour
         float damageAmount,
         float lifeTime)
     {
+        direction = direction.normalized;
         owner = bulletOwner;
         damage = damageAmount;
         lifetime = lifeTime;
         hasHit = false;
 
+        transform.SetPositionAndRotation(
+            transform.position,
+            Quaternion.LookRotation(direction)
+        );
+
+        rb.position = transform.position;
+        rb.rotation = transform.rotation;
+        rb.velocity = Vector3.zero;
+        rb.angularVelocity = Vector3.zero;
+
         IgnoreOwnerCollision();
         IgnorePlayerCollision();
 
-        rb.velocity = direction.normalized * speed;
+        rb.velocity = direction * speed;
 
         CancelInvoke();
         Invoke(nameof(Expire), lifetime);
